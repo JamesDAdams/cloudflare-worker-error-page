@@ -109,63 +109,6 @@ function getErrorDetails(cfCode, env) {
 }
 
 /**
- * Check if a host matches any pattern in a list (supports *.domain.fr wildcards)
- * @param {string} host - The hostname to check
- * @param {Array<string>} patterns - Array of patterns to match against
- * @returns {boolean} True if the host matches any pattern
- */
-function hostMatchesAny(host, patterns) {
-  if (!host || !Array.isArray(patterns)) return false;
-  return patterns.some(pattern => {
-    if (pattern.startsWith('*.')) {
-      const suffix = pattern.slice(1); // ".domain.fr"
-      return host.endsWith(suffix) && host !== pattern.slice(2);
-    }
-    return host === pattern;
-  });
-}
-
-/**
- * Try to fetch cached version from Cloudflare Cache (only called on error)
- * Uses the native Cloudflare cache that was populated during normal operation
- * @param {Request} request - Incoming request
- * @returns {Promise<Response|null>} Cached response or null
- */
-async function tryFetchAlwaysOnlineCache(request) {
-  try {
-    console.log('Trying to fetch from Cloudflare cache for:', request.url);
-
-    // Try to access Cloudflare's cache directly via Cache API
-    // This will use the cache that Cloudflare populates automatically
-    const cache = caches.default;
-    const cacheKey = new Request(request.url, {
-      method: 'GET'
-    });
-
-    const cachedResponse = await cache.match(cacheKey);
-
-    if (cachedResponse) {
-      const headers = new Headers(cachedResponse.headers);
-      headers.set('X-Served-From-Cache', 'cloudflare-always-online');
-      headers.set('X-Worker-Handled', 'true');
-
-      console.log('Cache hit! Serving cached version');
-      return new Response(cachedResponse.body, {
-        status: 200,
-        statusText: 'OK',
-        headers: headers
-      });
-    }
-
-    console.log('No cache found for this URL');
-  } catch (err) {
-    console.error('Always Online cache fetch failed:', err);
-  }
-
-  return null;
-}
-
-/**
  * Main redirection and error handling function
  * @param {Request} request - Incoming request
  * @param {Response|null} response - Server response if available
@@ -175,9 +118,6 @@ async function tryFetchAlwaysOnlineCache(request) {
  * @returns {Promise<Response|null>} Appropriate error response or null
  */
 export async function c_redirect(request, response, thrownError, isMaintenance, env) {
-  const host = request.headers.get('host');
-  const alwaysOnlineDomains = env.ALWAYS_ONLINE_DOMAINS || [];
-  const useAlwaysOnline = hostMatchesAny(host, alwaysOnlineDomains);
   // Maintenance mode
   if (isMaintenance) {
     const details = getErrorDetails("MAINTENANCE", env);
@@ -196,28 +136,12 @@ export async function c_redirect(request, response, thrownError, isMaintenance, 
 
   // Handle server errors (5xx) from the response
   if (response && response.status >= 500) {
-    // Try Always Online cache if enabled for this domain
-    if (useAlwaysOnline) {
-      const cachedResponse = await tryFetchAlwaysOnlineCache(request);
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-    }
-
     const details = getErrorDetails(response.status, env);
     return makeResponse(generateErrorPage(details), details.errorCode);
   }
 
   // Handle thrown errors (fetch failed entirely, e.g. container down / connection refused)
   if (thrownError && !response) {
-    // Try Always Online cache if enabled for this domain
-    if (useAlwaysOnline) {
-      const cachedResponse = await tryFetchAlwaysOnlineCache(request);
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-    }
-
     const details = getErrorDetails(502, env);
     return makeResponse(generateErrorPage(details), details.errorCode);
   }
