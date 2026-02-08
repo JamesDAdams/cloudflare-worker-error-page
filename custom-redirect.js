@@ -109,6 +109,58 @@ function getErrorDetails(cfCode, env) {
 }
 
 /**
+ * Check if a host matches any pattern in a list (supports *.domain.fr wildcards)
+ * @param {string} host - The hostname to check
+ * @param {Array<string>} patterns - Array of patterns to match against
+ * @returns {boolean} True if the host matches any pattern
+ */
+function hostMatchesAny(host, patterns) {
+  if (!host || !Array.isArray(patterns)) return false;
+  return patterns.some(pattern => {
+    if (pattern.startsWith('*.')) {
+      const suffix = pattern.slice(1); // ".domain.fr"
+      return host.endsWith(suffix) && host !== pattern.slice(2);
+    }
+    return host === pattern;
+  });
+}
+
+/**
+ * Try to fetch cached version from Cloudflare Always Online
+ * @param {Request} request - Incoming request
+ * @returns {Promise<Response|null>} Cached response or null
+ */
+async function tryFetchAlwaysOnlineCache(request) {
+  try {
+    // Try to fetch from Cloudflare cache with special options
+    const cacheUrl = new URL(request.url);
+    const cacheKey = new Request(cacheUrl.toString(), request);
+    const cache = caches.default;
+    
+    // Try to get cached response
+    const cachedResponse = await cache.match(cacheKey);
+    
+    if (cachedResponse) {
+      // Clone the response and add a header to indicate it's from cache
+      const newResponse = new Response(cachedResponse.body, cachedResponse);
+      const headers = new Headers(newResponse.headers);
+      headers.set('X-Served-From-Cache', 'cloudflare-always-online');
+      headers.set('X-Worker-Handled', 'true');
+      
+      return new Response(newResponse.body, {
+        status: 200,
+        statusText: 'OK',
+        headers: headers
+      });
+    }
+  } catch (err) {
+    console.error('Always Online cache fetch failed:', err);
+  }
+  
+  return null;
+}
+
+/**
  * Main redirection and error handling function
  * @param {Request} request - Incoming request
  * @param {Response|null} response - Server response if available
@@ -118,6 +170,9 @@ function getErrorDetails(cfCode, env) {
  * @returns {Promise<Response|null>} Appropriate error response or null
  */
 export async function c_redirect(request, response, thrownError, isMaintenance, env) {
+  const host = request.headers.get('host');
+  const alwaysOnlineDomains = env.ALWAYS_ONLINE_DOMAINS || [];
+  const useAlwaysOnline = hostMatchesAny(host, alwaysOnlineDomains);
   // Maintenance mode
   if (isMaintenance) {
     const details = getErrorDetails("MAINTENANCE", env);
@@ -136,12 +191,28 @@ export async function c_redirect(request, response, thrownError, isMaintenance, 
 
   // Handle server errors (5xx) from the response
   if (response && response.status >= 500) {
+    // Try Always Online cache if enabled for this domain
+    if (useAlwaysOnline) {
+      const cachedResponse = await tryFetchAlwaysOnlineCache(request);
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+    }
+    
     const details = getErrorDetails(response.status, env);
     return makeResponse(generateErrorPage(details), details.errorCode);
   }
 
   // Handle thrown errors (fetch failed entirely, e.g. container down / connection refused)
   if (thrownError && !response) {
+    // Try Always Online cache if enabled for this domain
+    if (useAlwaysOnline) {
+      const cachedResponse = await tryFetchAlwaysOnlineCache(request);
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+    }
+    
     const details = getErrorDetails(502, env);
     return makeResponse(generateErrorPage(details), details.errorCode);
   }

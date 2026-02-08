@@ -23,6 +23,16 @@ ENABLE_CACHE = true
 CACHE_TTL_MS = 60000
 
 
+# Always Online: list of domains/subdomains to use Cloudflare cache instead of error page when down
+# Supports wildcards: *.example.com will match all subdomains
+# When a site from this list returns a 5xx error or is unreachable, the worker will try to serve
+# the cached version from Cloudflare cache instead of showing the error page
+# Examples: ["example.com", "*.example.com", "specific.domain.com"]
+# Leave empty to disable: ALWAYS_ONLINE_DOMAINS = []
+# Example with domains: ALWAYS_ONLINE_DOMAINS = ["monsite.com", "*.example.fr"]
+ALWAYS_ONLINE_DOMAINS = []
+
+
 # Enable or disable 4G banner functionality
 ENABLE_4G_BANNER = true
 # Message for 4G banner when fiber is down
