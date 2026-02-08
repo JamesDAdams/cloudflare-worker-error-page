@@ -17,7 +17,7 @@ enabled = false
 
 # Language setting (FR or EN)
 LANGUAGE = "FR"
-# Enable/disable cache (true/false) for limite api call between this worker and the kv storage, in Cloudflare free plan You have only 100 000 reads per day 
+# Enable/disable cache (true/false) for limite api call between this worker and the kv storage, in Cloudflare free plan You have only 100 000 reads per day
 ENABLE_CACHE = false
 # Cache duration in ms (default: 60000 = 1 minute)
 CACHE_TTL_MS = 60000
@@ -29,9 +29,9 @@ ENABLE_4G_BANNER = true
 TEXT_4G_BANNER_MESSAGE = "Attention des lenteurs peuvent survenir, ma fibre est H.S. Le serveur fonctionne en 4G !"
 
 # Enable or disable UPS banner functionality (requires NUT server)
-ENABLE_UPS_BANNER = false
+ENABLE_UPS_BANNER = true
 # Message for UPS banner when running on battery
-TEXT_UPS_BANNER_MESSAGE = "Le serveur fonctionne sur onduleur (batterie). Une coupure de courant est en cours !"
+TEXT_UPS_BANNER_MESSAGE = "Le serveur fonctionne batterie. Une coupure de courant est en cours !"
 
 
 # Enable or disable the error reporting functionality
