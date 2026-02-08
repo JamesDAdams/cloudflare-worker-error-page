@@ -136,17 +136,17 @@ async function tryFetchAlwaysOnlineCache(request) {
     const cacheUrl = new URL(request.url);
     const cacheKey = new Request(cacheUrl.toString(), request);
     const cache = caches.default;
-    
+
     // Try to get cached response
     const cachedResponse = await cache.match(cacheKey);
-    
+
     if (cachedResponse) {
       // Clone the response and add a header to indicate it's from cache
       const newResponse = new Response(cachedResponse.body, cachedResponse);
       const headers = new Headers(newResponse.headers);
       headers.set('X-Served-From-Cache', 'cloudflare-always-online');
       headers.set('X-Worker-Handled', 'true');
-      
+
       return new Response(newResponse.body, {
         status: 200,
         statusText: 'OK',
@@ -156,7 +156,7 @@ async function tryFetchAlwaysOnlineCache(request) {
   } catch (err) {
     console.error('Always Online cache fetch failed:', err);
   }
-  
+
   return null;
 }
 
@@ -198,7 +198,7 @@ export async function c_redirect(request, response, thrownError, isMaintenance, 
         return cachedResponse;
       }
     }
-    
+
     const details = getErrorDetails(response.status, env);
     return makeResponse(generateErrorPage(details), details.errorCode);
   }
@@ -212,7 +212,7 @@ export async function c_redirect(request, response, thrownError, isMaintenance, 
         return cachedResponse;
       }
     }
-    
+
     const details = getErrorDetails(502, env);
     return makeResponse(generateErrorPage(details), details.errorCode);
   }
