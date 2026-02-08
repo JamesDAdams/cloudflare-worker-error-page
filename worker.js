@@ -227,6 +227,13 @@ function getBannerMessage(env, state, host) {
 
 export default {
   async fetch(request, env, ctx) {
+    // Block unwanted IPs early to save quota (e.g., UniFi/Pterodactyl health checks)
+    const clientIp = request.headers.get('CF-Connecting-IP');
+    const blockedIps = env.BLOCKED_IPS ? env.BLOCKED_IPS.split(',').map(ip => ip.trim()) : [];
+    if (clientIp && blockedIps.includes(clientIp)) {
+      return new Response(null, { status: 204 }); // No Content - fast rejection
+    }
+
     const host = request.headers.get('host');
     const url = new URL(request.url);
 

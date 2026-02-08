@@ -34,6 +34,11 @@ ENABLE_UPS_BANNER = true
 TEXT_UPS_BANNER_MESSAGE = "Le serveur fonctionne batterie. Une coupure de courant est en cours !"
 
 
+# Blocked IPs (comma-separated) - requests from these IPs will be rejected immediately
+# Example: IPs from UniFi/Pterodactyl containers that generate useless errors
+# Set this as a secret on Cloudflare dashboard: wrangler secret put BLOCKED_IPS
+# BLOCKED_IPS = "ip1,ip2,ip3"
+
 # Enable or disable the error reporting functionality
 ENABLE_REPORT_ERROR = true
 # Discord webhook URL for error reports
