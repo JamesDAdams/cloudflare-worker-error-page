@@ -8,7 +8,7 @@
 # Cloudflare Worker Error Page
 
 This project allows you to deploy a custom error page using a Cloudflare Worker.
-With an option for enable maintenance mod, add a banner to a specific or all domain and show a banner when your LTE backup is active
+With an option for enable maintenance mod, add a banner to a specific or all domain, show a banner when your LTE backup is active and show a banner when your UPS is on battery
 
 ⚠️ For Now only work with Cloudflare tunnel (Zero trust)
 
@@ -122,9 +122,46 @@ docker run -e CF_ACCOUNT_ID=Your_cloudflare_account_id \
 - Click on **Continue to summary** and **Create token**
 - SLEEP_SECONDS is how often the container will check the server's IP address.
 
-### 7. Add Auth on your maintenance page
+### 7. OPTIONAL Add UPS monitoring via NUT (Network UPS Tools)
 
-TO DO 
+The Docker container can also monitor your UPS via a NUT server and display a banner when the UPS is running on battery.
+
+- On wrangler.toml set `ENABLE_UPS_BANNER = true`
+- Customize the banner message with `TEXT_UPS_BANNER_MESSAGE`
+- Your NUT server must be accessible from the Docker container on port 3493 (default)
+
+Add these environment variables to your Docker container:
+
+```bash
+docker run -e CF_ACCOUNT_ID=Your_cloudflare_account_id \
+           -e CF_NAMESPACE_ID=Your_cloudflare_namespace_id \
+           -e CF_API_TOKEN=Your_cloudflare_api_token \
+           -e ENABLE_UPS_CHECK=true \
+           -e NUT_HOST=192.168.1.100 \
+           -e NUT_UPS_NAME=ups \
+           -e NUT_PORT=3493 \
+           -e KV_UPS_KEY=ups-on-battery \
+           -e SLEEP_SECONDS=60 \
+           ghcr.io/jamesdadams/cloudflare-worker-error-page:latest
+```
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ENABLE_UPS_CHECK` | Enable UPS monitoring | `false` |
+| `NUT_HOST` | IP address of your NUT server | (required) |
+| `NUT_UPS_NAME` | Name of the UPS in NUT (e.g. `ups`, `eaton`) | (required) |
+| `NUT_PORT` | NUT server port | `3493` |
+| `KV_UPS_KEY` | KV key name for UPS status | `ups-on-battery` |
+
+The container queries `ups.status` from the NUT server. When the status contains `OB` (On Battery), the banner is displayed on all pages.
+
+You can also manually toggle UPS mode from the admin panel or via the API:
+- `POST /worker/api/toggle-ups-mode` - Toggle UPS battery state
+- `POST /worker/api/ups-mode` with body `{ "enabled": true/false }` - Set UPS state
+
+### 8. Add Auth on your maintenance page
+
+TO DO
 
 ---
 
@@ -176,9 +213,10 @@ TO DO
 
 Ce projet vous permet de déployer des pages d'erreur personnalisée à l'aide d'un Cloudflare Worker
 
-- Un mode maintenance, 
+- Un mode maintenance,
 - Ajouter une bannière à un ou plusieurs domaines spécifiques
 - Afficher une bannière lorsque votre backup LTE est actif.
+- Afficher une bannière lorsque votre onduleur (UPS) fonctionne sur batterie.
 - Un bouton pour vous signaler une erreur qui envoie une notification sur Discord
 
 ![presentation](images/other/presentation.png)
@@ -197,6 +235,7 @@ Ce projet vous permet de déployer des pages d'erreur personnalisée à l'aide d
 - Définissez votre langue (FR ou EN)
 - Si vous ne voulez pas avoir la fonctionnalité pour signaler une erreur qui permet d'envoyer un message Discord faite ceci : ```ENABLE_REPORT_ERROR = false```
 - Si vous n'avez pas de backup 4g sur votre serveur, faite ceci : ```ENABLE_4G_BANNER = false ```
+- Si vous avez un onduleur (UPS) avec un serveur NUT, activez le bandeau UPS : ```ENABLE_UPS_BANNER = true ```
 - Normalement, ce n'est pas nécessaire de modifier, mais vous pouvez pour chaque message d'erreur ajouter son code d'erreur pour `TEXT_BOX_ERROR_CODE`, `TEXT_TUNNEL_ERROR_CODE` et `TEXT_CONTAINER_ERROR_CODE`
 - Modifiez le texte des différents messages d'erreur si vous le voulez
 ### 3. Créez un namespace KV
@@ -278,7 +317,44 @@ docker run -e CF_ACCOUNT_ID=Votre_id_compte_cloudflare \
 - ![Créer worker](images/backup4g/backup4g_3.png)
 - SLEEP_SECONDS définit la fréquence à laquelle le conteneur vérifiera l'adresse IP du serveur.
 
-### 7. Ajoutez une authentification sur votre page de maintenance
+### 7. OPTIONNEL : Ajoutez la surveillance de l'onduleur (UPS) via NUT
+
+Le conteneur Docker peut aussi surveiller votre onduleur via un serveur NUT (Network UPS Tools) et afficher un bandeau quand l'UPS fonctionne sur batterie.
+
+- Dans wrangler.toml, mettez `ENABLE_UPS_BANNER = true`
+- Personnalisez le message avec `TEXT_UPS_BANNER_MESSAGE`
+- Votre serveur NUT doit être accessible depuis le conteneur Docker sur le port 3493 (par défaut)
+
+Ajoutez ces variables d'environnement à votre conteneur Docker :
+
+```bash
+docker run -e CF_ACCOUNT_ID=Votre_id_compte_cloudflare \
+           -e CF_NAMESPACE_ID=Votre_id_namespace_cloudflare \
+           -e CF_API_TOKEN=Votre_token_api_cloudflare \
+           -e ENABLE_UPS_CHECK=true \
+           -e NUT_HOST=192.168.1.100 \
+           -e NUT_UPS_NAME=ups \
+           -e NUT_PORT=3493 \
+           -e KV_UPS_KEY=ups-on-battery \
+           -e SLEEP_SECONDS=60 \
+           ghcr.io/jamesdadams/cloudflare-worker-error-page:latest
+```
+
+| Variable | Description | Défaut |
+|----------|-------------|--------|
+| `ENABLE_UPS_CHECK` | Activer la surveillance UPS | `false` |
+| `NUT_HOST` | Adresse IP de votre serveur NUT | (requis) |
+| `NUT_UPS_NAME` | Nom de l'UPS dans NUT (ex: `ups`, `eaton`) | (requis) |
+| `NUT_PORT` | Port du serveur NUT | `3493` |
+| `KV_UPS_KEY` | Nom de la clé KV pour le statut UPS | `ups-on-battery` |
+
+Le conteneur interroge `ups.status` depuis le serveur NUT. Quand le statut contient `OB` (On Battery / sur batterie), le bandeau est affiché sur toutes les pages.
+
+Vous pouvez aussi basculer manuellement le mode UPS depuis le panneau d'administration ou via l'API :
+- `POST /worker/api/toggle-ups-mode` - Basculer l'état batterie UPS
+- `POST /worker/api/ups-mode` avec le body `{ "enabled": true/false }` - Définir l'état UPS
+
+### 8. Ajoutez une authentification sur votre page de maintenance
 
 À FAIRE
 

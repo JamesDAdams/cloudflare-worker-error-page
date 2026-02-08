@@ -1,4 +1,6 @@
-export default function maintenanceHtml(globalMaintenance, subdomainsMaintenance = [], bannerSubdomains = [], bannerMessage = '', language = 'FR') {
+export default function maintenanceHtml(globalMaintenance, subdomainsMaintenance = [], bannerSubdomains = [], bannerMessage = '', language = 'FR', options = {}) {
+  const { enable4g = false, is4gMode = false, enableUps = false, upsOnBattery = false } = options;
+
   const texts = {
     FR: {
       title: 'Contrôle Maintenance',
@@ -15,7 +17,13 @@ export default function maintenanceHtml(globalMaintenance, subdomainsMaintenance
       update: 'Mettre à jour',
       addBannerSubdomainLabel: 'Ajouter un sous-domaine pour le bandeau :',
       bannerSubdomainPlaceholder: 'ex: admin.monsite.com ou *.monsite.com',
-      bannerInfo: 'Le bandeau s\'affiche sur les sous-domaines listés ci-dessus. Utilisez *.domaine.fr pour cibler tous les sous-domaines.'
+      bannerInfo: 'Le bandeau s\'affiche sur les sous-domaines listés ci-dessus. Utilisez *.domaine.fr pour cibler tous les sous-domaines.',
+      mode4gTitle: 'Mode 4G',
+      toggle4g: 'Basculer le mode 4G',
+      upsTitle: 'Onduleur (UPS)',
+      upsOnBattery: 'Sur batterie',
+      upsOnLine: 'Sur secteur',
+      toggleUps: 'Basculer le mode UPS'
     },
     EN: {
       title: 'Maintenance Control',
@@ -32,12 +40,40 @@ export default function maintenanceHtml(globalMaintenance, subdomainsMaintenance
       update: 'Update',
       addBannerSubdomainLabel: 'Add a subdomain for the banner:',
       bannerSubdomainPlaceholder: 'ex: admin.mysite.com or *.mysite.com',
-      bannerInfo: 'The banner is displayed on the subdomains listed above. Use *.domain.com to target all subdomains.'
+      bannerInfo: 'The banner is displayed on the subdomains listed above. Use *.domain.com to target all subdomains.',
+      mode4gTitle: '4G Mode',
+      toggle4g: 'Toggle 4G mode',
+      upsTitle: 'UPS',
+      upsOnBattery: 'On battery',
+      upsOnLine: 'On line power',
+      toggleUps: 'Toggle UPS mode'
     }
   };
 
   const t = texts[language] || texts.FR;
   const htmlLang = language === 'EN' ? 'en' : 'fr';
+
+  const mode4gClass = is4gMode ? '' : 'inactive';
+  const mode4gLabel = is4gMode ? t.active : t.inactive;
+  const section4g = enable4g ? `
+      <div class="section">
+        <h2>${t.mode4gTitle}</h2>
+        <div class="status ${mode4gClass}">
+          ${t.mode4gTitle}: ${mode4gLabel}
+        </div>
+        <button onclick="toggle4g()">${t.toggle4g}</button>
+      </div>` : '';
+
+  const upsClass = upsOnBattery ? 'inactive' : '';
+  const upsLabel = upsOnBattery ? t.upsOnBattery : t.upsOnLine;
+  const sectionUps = enableUps ? `
+      <div class="section">
+        <h2>${t.upsTitle}</h2>
+        <div class="status ${upsClass}">
+          ${t.upsTitle}: ${upsLabel}
+        </div>
+        <button onclick="toggleUps()">${t.toggleUps}</button>
+      </div>` : '';
 
   return `<!DOCTYPE html>
   <html lang="${htmlLang}">
@@ -173,6 +209,8 @@ export default function maintenanceHtml(globalMaintenance, subdomainsMaintenance
         ${bannerMessage ? `<div class="banner-preview">${bannerMessage}</div>` : ''}
         <div style="font-size:0.9em;color:#bbb;margin-top:8px;">${t.bannerInfo}</div>
       </div>
+      ${section4g}
+      ${sectionUps}
     </div>
     <script>
       async function toggleGlobal() {
@@ -222,6 +260,14 @@ export default function maintenanceHtml(globalMaintenance, subdomainsMaintenance
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ subdomain: sd })
         });
+        location.reload();
+      }
+      async function toggle4g() {
+        await fetch('/worker/api/toggle-4g-mode', { method: 'POST' });
+        location.reload();
+      }
+      async function toggleUps() {
+        await fetch('/worker/api/toggle-ups-mode', { method: 'POST' });
         location.reload();
       }
     </script>

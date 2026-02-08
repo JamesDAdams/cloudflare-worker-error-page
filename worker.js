@@ -22,54 +22,36 @@ function safeJsonParse(str, fallback) {
 // Simple in-memory cache (per worker instance)
 const cache = {
   maintenance: { value: null, ts: 0 },
-  is4g: { value: null, ts: 0 }
+  is4g: { value: null, ts: 0 },
+  upsOnBattery: { value: null, ts: 0 }
 };
+
+// Read a single KV key with optional in-memory cache
+async function getCachedKvValue(env, cacheEntry, kvKey, useCache, cacheEnabled, cacheTtl, now) {
+  if (useCache && cacheEnabled && cacheEntry.value !== null && (now - cacheEntry.ts < cacheTtl)) {
+    return cacheEntry.value;
+  }
+  const value = await env.MAINTENANCE_KV.get(kvKey);
+  if (useCache && cacheEnabled) {
+    cacheEntry.value = value;
+    cacheEntry.ts = now;
+  }
+  return value;
+}
 
 // Read maintenance and banner states from KV (single key) with optional cache
 async function getMaintenanceState(env, host, useCache = true) {
-  // Read cache config from env
   const cacheEnabled = env.ENABLE_CACHE === undefined ? true : env.ENABLE_CACHE === true || env.ENABLE_CACHE === 'true';
   const cacheTtl = env.CACHE_TTL_MS ? parseInt(env.CACHE_TTL_MS, 10) : 60000;
-
   const now = Date.now();
-  let stateObj;
-  if (useCache && cacheEnabled) {
-    if (cache.maintenance.value && (now - cache.maintenance.ts < cacheTtl)) {
-      stateObj = cache.maintenance.value;
-    } else {
-      const stateRaw = await env.MAINTENANCE_KV.get('MAINTENANCE_STATE');
-      stateObj = safeJsonParse(stateRaw, {
-        isGlobalMaintenance: false,
-        subdomainsMaintenance: [],
-        bannerSubdomains: [],
-        bannerMessage: ''
-      });
-      cache.maintenance.value = stateObj;
-      cache.maintenance.ts = now;
-    }
-  } else {
-    const stateRaw = await env.MAINTENANCE_KV.get('MAINTENANCE_STATE');
-    stateObj = safeJsonParse(stateRaw, {
-      isGlobalMaintenance: false,
-      subdomainsMaintenance: [],
-      bannerSubdomains: [],
-      bannerMessage: ''
-    });
-  }
 
-  // Cache for wan-is-4g
-  let is4gMode;
-  if (useCache && cacheEnabled) {
-    if (cache.is4g.value !== null && (now - cache.is4g.ts < cacheTtl)) {
-      is4gMode = cache.is4g.value;
-    } else {
-      is4gMode = await env.MAINTENANCE_KV.get('wan-is-4g');
-      cache.is4g.value = is4gMode;
-      cache.is4g.ts = now;
-    }
-  } else {
-    is4gMode = await env.MAINTENANCE_KV.get('wan-is-4g');
-  }
+  const stateRaw = await getCachedKvValue(env, cache.maintenance, 'MAINTENANCE_STATE', useCache, cacheEnabled, cacheTtl, now);
+  const stateObj = safeJsonParse(stateRaw, {
+    isGlobalMaintenance: false, subdomainsMaintenance: [], bannerSubdomains: [], bannerMessage: ''
+  });
+
+  const is4gMode = await getCachedKvValue(env, cache.is4g, 'wan-is-4g', useCache, cacheEnabled, cacheTtl, now);
+  const upsOnBattery = await getCachedKvValue(env, cache.upsOnBattery, 'ups-on-battery', useCache, cacheEnabled, cacheTtl, now);
 
   return {
     isGlobalMaintenance: stateObj.isGlobalMaintenance === true || stateObj.isGlobalMaintenance === 'true',
@@ -77,7 +59,8 @@ async function getMaintenanceState(env, host, useCache = true) {
     isSubdomainMaintenance: Array.isArray(stateObj.subdomainsMaintenance) ? stateObj.subdomainsMaintenance.includes(host) : false,
     bannerSubdomains: Array.isArray(stateObj.bannerSubdomains) ? stateObj.bannerSubdomains : [],
     bannerMessage: typeof stateObj.bannerMessage === 'string' ? stateObj.bannerMessage : '',
-    is4gMode: is4gMode === 'true'
+    is4gMode: is4gMode === 'true',
+    upsOnBattery: upsOnBattery === 'true'
   };
 }
 
@@ -152,13 +135,36 @@ async function handleReportError(request, env) {
   }
 }
 
+// Helper to check if an env var is truthy (handles both boolean and string from wrangler.toml)
+function envIsTrue(value) {
+  return value === true || value === 'true';
+}
+
+// Determine which banner message to show, if any (UPS + 4G can combine)
+function getBannerMessage(env, state, host) {
+  const messages = [];
+  if (envIsTrue(env.ENABLE_UPS_BANNER) && state.upsOnBattery) {
+    messages.push(env.TEXT_UPS_BANNER_MESSAGE);
+  }
+  if (envIsTrue(env.ENABLE_4G_BANNER) && state.is4gMode) {
+    messages.push(env.TEXT_4G_BANNER_MESSAGE);
+  }
+  if (messages.length > 0) {
+    return messages.join(' | ');
+  }
+  if (state.bannerMessage && hostMatchesAny(host, state.bannerSubdomains)) {
+    return state.bannerMessage;
+  }
+  return null;
+}
+
 export default {
   async fetch(request, env, ctx) {
     const host = request.headers.get('host');
     const url = new URL(request.url);
 
     // Handle /report-error POST for Discord webhook if enabled
-    if ((env.ENABLE_REPORT_ERROR === true || env.ENABLE_REPORT_ERROR === 'true') && url.pathname === '/report-error' && request.method === 'POST') {
+    if (envIsTrue(env.ENABLE_REPORT_ERROR) && url.pathname === '/report-error' && request.method === 'POST') {
       return await handleReportError(request, env);
     }
 
@@ -170,7 +176,12 @@ export default {
     if (host === env.MAINTENANCE_DOMAIN && url.pathname === '/') {
       state = await getMaintenanceState(env, host, false);
       return new Response(
-        maintenanceHtml(state.isGlobalMaintenance, state.subdomainsMaintenance, state.bannerSubdomains, state.bannerMessage, env.LANGUAGE || 'EN'),
+        maintenanceHtml(state.isGlobalMaintenance, state.subdomainsMaintenance, state.bannerSubdomains, state.bannerMessage, env.LANGUAGE || 'EN', {
+          enable4g: envIsTrue(env.ENABLE_4G_BANNER),
+          is4gMode: state.is4gMode,
+          enableUps: envIsTrue(env.ENABLE_UPS_BANNER),
+          upsOnBattery: state.upsOnBattery
+        }),
         { headers: { 'content-type': 'text/html' } }
       );
     }
@@ -185,7 +196,6 @@ export default {
     try {
       response = await fetch(request);
     } catch (err) {
-      // isMaintenance is now always defined above
       const redirectResponse = await c_redirect(request, null, err, isMaintenance, env);
       if (redirectResponse) return redirectResponse;
       return new Response('Upstream unreachable', { status: 502 });
@@ -195,19 +205,9 @@ export default {
     const redirectResponse = await c_redirect(request, response, null, isMaintenance, env);
     if (redirectResponse) return redirectResponse;
 
-    // Banner injection - check for 4G mode or regular banner
-    let showBanner = false;
-    let bannerMessage = '';
-    
-    if (env.ENABLE_4G_BANNER && state.is4gMode) {
-      showBanner = true;
-      bannerMessage = env.TEXT_4G_BANNER_MESSAGE;
-    } else if (state.bannerMessage && hostMatchesAny(host, state.bannerSubdomains)) {
-      showBanner = true;
-      bannerMessage = state.bannerMessage;
-    }
-    
-    if (showBanner && response.headers.get('content-type')?.includes('text/html')) {
+    // Banner injection
+    const bannerMessage = getBannerMessage(env, state, host);
+    if (bannerMessage && response.headers.get('content-type')?.includes('text/html')) {
       return await injectBanner(response, bannerMessage);
     }
 

@@ -28,6 +28,11 @@ ENABLE_4G_BANNER = true
 # Message for 4G banner when fiber is down
 TEXT_4G_BANNER_MESSAGE = "Attention des lenteurs peuvent survenir, ma fibre est H.S. Le serveur fonctionne en 4G !"
 
+# Enable or disable UPS banner functionality (requires NUT server)
+ENABLE_UPS_BANNER = false
+# Message for UPS banner when running on battery
+TEXT_UPS_BANNER_MESSAGE = "Le serveur fonctionne sur onduleur (batterie). Une coupure de courant est en cours !"
+
 
 # Enable or disable the error reporting functionality
 ENABLE_REPORT_ERROR = true
