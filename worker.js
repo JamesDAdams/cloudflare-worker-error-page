@@ -2,6 +2,18 @@ import { c_redirect } from './custom-redirect.js'
 import maintenanceHtml from './html/maintenance.js'
 import { handleApi } from './handle-api.js'
 
+// Check if a host matches any pattern in a list (supports *.domain.fr wildcards)
+function hostMatchesAny(host, patterns) {
+  if (!host || !Array.isArray(patterns)) return false;
+  return patterns.some(pattern => {
+    if (pattern.startsWith('*.')) {
+      const suffix = pattern.slice(1); // ".domain.fr"
+      return host.endsWith(suffix) && host !== pattern.slice(2);
+    }
+    return host === pattern;
+  });
+}
+
 // Helper to safely parse JSON
 function safeJsonParse(str, fallback) {
   try { return JSON.parse(str || ''); } catch { return fallback; }
@@ -190,7 +202,7 @@ export default {
     if (env.ENABLE_4G_BANNER && state.is4gMode) {
       showBanner = true;
       bannerMessage = env.TEXT_4G_BANNER_MESSAGE;
-    } else if (state.bannerMessage && state.bannerSubdomains.includes(host)) {
+    } else if (state.bannerMessage && hostMatchesAny(host, state.bannerSubdomains)) {
       showBanner = true;
       bannerMessage = state.bannerMessage;
     }

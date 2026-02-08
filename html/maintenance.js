@@ -14,8 +14,8 @@ export default function maintenanceHtml(globalMaintenance, subdomainsMaintenance
       bannerMessageLabel: 'Message du bandeau :',
       update: 'Mettre à jour',
       addBannerSubdomainLabel: 'Ajouter un sous-domaine pour le bandeau :',
-      bannerSubdomainPlaceholder: 'ex: admin.monsite.com',
-      bannerInfo: 'Le bandeau s\'affiche sur les sous-domaines listés ci-dessus'
+      bannerSubdomainPlaceholder: 'ex: admin.monsite.com ou *.monsite.com',
+      bannerInfo: 'Le bandeau s\'affiche sur les sous-domaines listés ci-dessus. Utilisez *.domaine.fr pour cibler tous les sous-domaines.'
     },
     EN: {
       title: 'Maintenance Control',
@@ -31,8 +31,8 @@ export default function maintenanceHtml(globalMaintenance, subdomainsMaintenance
       bannerMessageLabel: 'Banner message:',
       update: 'Update',
       addBannerSubdomainLabel: 'Add a subdomain for the banner:',
-      bannerSubdomainPlaceholder: 'ex: admin.mysite.com',
-      bannerInfo: 'The banner is displayed on the subdomains listed above'
+      bannerSubdomainPlaceholder: 'ex: admin.mysite.com or *.mysite.com',
+      bannerInfo: 'The banner is displayed on the subdomains listed above. Use *.domain.com to target all subdomains.'
     }
   };
 
