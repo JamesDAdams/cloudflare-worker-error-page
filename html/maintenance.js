@@ -18,6 +18,8 @@ export default function maintenanceHtml(globalMaintenance, subdomainsMaintenance
       addBannerSubdomainLabel: 'Ajouter un sous-domaine pour le bandeau :',
       bannerSubdomainPlaceholder: 'ex: admin.monsite.com ou *.monsite.com',
       bannerInfo: 'Le bandeau s\'affiche sur les sous-domaines listés ci-dessus. Utilisez *.domaine.fr pour cibler tous les sous-domaines.',
+      testBannersTitle: 'Test des bandeaux',
+      testBannersInfo: 'Boutons de test pour simuler l\'affichage des bandeaux',
       mode4gTitle: 'Mode 4G',
       toggle4g: 'Basculer le mode 4G',
       upsTitle: 'Onduleur (UPS)',
@@ -41,6 +43,8 @@ export default function maintenanceHtml(globalMaintenance, subdomainsMaintenance
       addBannerSubdomainLabel: 'Add a subdomain for the banner:',
       bannerSubdomainPlaceholder: 'ex: admin.mysite.com or *.mysite.com',
       bannerInfo: 'The banner is displayed on the subdomains listed above. Use *.domain.com to target all subdomains.',
+      testBannersTitle: 'Banner testing',
+      testBannersInfo: 'Test buttons to simulate banner display',
       mode4gTitle: '4G Mode',
       toggle4g: 'Toggle 4G mode',
       upsTitle: 'UPS',
@@ -53,26 +57,39 @@ export default function maintenanceHtml(globalMaintenance, subdomainsMaintenance
   const t = texts[language] || texts.FR;
   const htmlLang = language === 'EN' ? 'en' : 'fr';
 
-  const mode4gClass = is4gMode ? '' : 'inactive';
+  // 4G: active = red (bad, fiber down), inactive = green (good)
+  const mode4gClass = is4gMode ? 'danger' : '';
   const mode4gLabel = is4gMode ? t.active : t.inactive;
-  const section4g = enable4g ? `
-      <div class="section">
-        <h2>${t.mode4gTitle}</h2>
-        <div class="status ${mode4gClass}">
-          ${t.mode4gTitle}: ${mode4gLabel}
-        </div>
-        <button onclick="toggle4g()">${t.toggle4g}</button>
-      </div>` : '';
+  const card4g = enable4g ? `
+        <div class="test-card">
+          <h3>${t.mode4gTitle}</h3>
+          <div class="status ${mode4gClass}">
+            ${mode4gLabel}
+          </div>
+          <button onclick="toggle4g()">${t.toggle4g}</button>
+        </div>` : '';
 
-  const upsClass = upsOnBattery ? 'inactive' : '';
+  // UPS: on battery = red (bad), on line = green (good)
+  const upsClass = upsOnBattery ? 'danger' : '';
   const upsLabel = upsOnBattery ? t.upsOnBattery : t.upsOnLine;
-  const sectionUps = enableUps ? `
+  const cardUps = enableUps ? `
+        <div class="test-card">
+          <h3>${t.upsTitle}</h3>
+          <div class="status ${upsClass}">
+            ${upsLabel}
+          </div>
+          <button onclick="toggleUps()">${t.toggleUps}</button>
+        </div>` : '';
+
+  const showTestSection = enable4g || enableUps;
+  const sectionTest = showTestSection ? `
       <div class="section">
-        <h2>${t.upsTitle}</h2>
-        <div class="status ${upsClass}">
-          ${t.upsTitle}: ${upsLabel}
+        <h2>${t.testBannersTitle}</h2>
+        <div style="font-size:0.9em;color:#bbb;margin-bottom:16px;">${t.testBannersInfo}</div>
+        <div class="test-row">
+          ${card4g}
+          ${cardUps}
         </div>
-        <button onclick="toggleUps()">${t.toggleUps}</button>
       </div>` : '';
 
   return `<!DOCTYPE html>
@@ -170,6 +187,25 @@ export default function maintenanceHtml(globalMaintenance, subdomainsMaintenance
       .banner-preview {
         background:#ffc; color:#222; padding:12px; text-align:center; border-bottom:1px solid #eee; font-weight:bold; margin:16px 0;
       }
+      .status.danger {
+        color: #ff5252;
+      }
+      .test-row {
+        display: flex;
+        gap: 24px;
+        flex-wrap: wrap;
+      }
+      .test-card {
+        flex: 1;
+        min-width: 180px;
+        background: rgba(0,0,0,0.2);
+        border-radius: 10px;
+        padding: 16px;
+        text-align: center;
+      }
+      .test-card h3 {
+        margin: 0 0 12px 0;
+      }
     </style>
   </head>
   <body>
@@ -209,8 +245,7 @@ export default function maintenanceHtml(globalMaintenance, subdomainsMaintenance
         ${bannerMessage ? `<div class="banner-preview">${bannerMessage}</div>` : ''}
         <div style="font-size:0.9em;color:#bbb;margin-top:8px;">${t.bannerInfo}</div>
       </div>
-      ${section4g}
-      ${sectionUps}
+      ${sectionTest}
     </div>
     <script>
       async function toggleGlobal() {
