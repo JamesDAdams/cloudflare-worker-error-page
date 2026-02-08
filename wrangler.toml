@@ -30,7 +30,7 @@ CACHE_TTL_MS = 60000
 # Examples: ["example.com", "*.example.com", "specific.domain.com"]
 # Leave empty to disable: ALWAYS_ONLINE_DOMAINS = []
 # Example with domains: ALWAYS_ONLINE_DOMAINS = ["monsite.com", "*.example.fr"]
-ALWAYS_ONLINE_DOMAINS = []
+ALWAYS_ONLINE_DOMAINS = ["jamestech.fr", "*.jamestech.fr"]
 
 
 # Enable or disable 4G banner functionality

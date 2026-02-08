@@ -258,10 +258,32 @@ export default {
       return await handleApi(request, url, host, env, state);
     }
 
+    // Check if Always Online is enabled for this domain
+    const alwaysOnlineDomains = env.ALWAYS_ONLINE_DOMAINS || [];
+    const useAlwaysOnline = hostMatchesAny(host, alwaysOnlineDomains);
+
     // Custom error/redirect handling
     let response;
     try {
-      response = await fetch(request);
+      // For Always Online domains, use cache-first strategy with longer TTL
+      if (useAlwaysOnline) {
+        response = await fetch(request, {
+          cf: {
+            cacheEverything: true,
+            cacheTtl: 86400, // 24 hours
+            cacheKey: request.url
+          }
+        });
+
+        // Store successful responses in cache for later use
+        if (response.ok) {
+          const cache = caches.default;
+          const cacheKey = new Request(request.url, { method: 'GET', headers: request.headers });
+          ctx.waitUntil(cache.put(cacheKey, response.clone()));
+        }
+      } else {
+        response = await fetch(request);
+      }
     } catch (err) {
       const redirectResponse = await c_redirect(request, null, err, isMaintenance, env);
       if (redirectResponse) return redirectResponse;

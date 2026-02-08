@@ -126,33 +126,65 @@ function hostMatchesAny(host, patterns) {
 }
 
 /**
- * Try to fetch cached version from Cloudflare Always Online
+ * Try to fetch cached version from Cloudflare Cache
  * @param {Request} request - Incoming request
  * @returns {Promise<Response|null>} Cached response or null
  */
 async function tryFetchAlwaysOnlineCache(request) {
   try {
-    // Try to fetch from Cloudflare cache with special options
-    const cacheUrl = new URL(request.url);
-    const cacheKey = new Request(cacheUrl.toString(), request);
-    const cache = caches.default;
+    console.log('Trying to fetch from Cloudflare cache for:', request.url);
 
-    // Try to get cached response
+    // Strategy 1: Try to fetch with cache-first approach using cf options
+    try {
+      const cacheFirstResponse = await fetch(request.url, {
+        method: 'GET',
+        cf: {
+          cacheEverything: true,
+          cacheTtl: 86400, // 1 day
+          cacheKey: request.url
+        }
+      });
+
+      // If we get a valid response (even from cache), use it
+      if (cacheFirstResponse && cacheFirstResponse.ok) {
+        const headers = new Headers(cacheFirstResponse.headers);
+        headers.set('X-Served-From-Cache', 'cloudflare-cache-strategy-1');
+        headers.set('X-Worker-Handled', 'true');
+
+        console.log('Cache hit from strategy 1');
+        return new Response(cacheFirstResponse.body, {
+          status: 200,
+          statusText: 'OK',
+          headers: headers
+        });
+      }
+    } catch (fetchErr) {
+      console.log('Strategy 1 failed, trying strategy 2');
+    }
+
+    // Strategy 2: Try to get from Workers Cache API
+    const cache = caches.default;
+    const cacheKey = new Request(request.url, {
+      method: 'GET',
+      headers: request.headers
+    });
+
     const cachedResponse = await cache.match(cacheKey);
 
-    if (cachedResponse) {
-      // Clone the response and add a header to indicate it's from cache
-      const newResponse = new Response(cachedResponse.body, cachedResponse);
-      const headers = new Headers(newResponse.headers);
-      headers.set('X-Served-From-Cache', 'cloudflare-always-online');
+    if (cachedResponse && cachedResponse.ok) {
+      const headers = new Headers(cachedResponse.headers);
+      headers.set('X-Served-From-Cache', 'cloudflare-cache-strategy-2');
       headers.set('X-Worker-Handled', 'true');
 
-      return new Response(newResponse.body, {
+      console.log('Cache hit from strategy 2');
+      return new Response(cachedResponse.body, {
         status: 200,
         statusText: 'OK',
         headers: headers
       });
     }
+
+    console.log('No cache found');
   } catch (err) {
     console.error('Always Online cache fetch failed:', err);
   }
