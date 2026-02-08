@@ -146,7 +146,7 @@ export default {
     const url = new URL(request.url);
 
     // Handle /report-error POST for Discord webhook if enabled
-    if (env.ENABLE_REPORT_ERROR === true && url.pathname === '/report-error' && request.method === 'POST') {
+    if ((env.ENABLE_REPORT_ERROR === true || env.ENABLE_REPORT_ERROR === 'true') && url.pathname === '/report-error' && request.method === 'POST') {
       return await handleReportError(request, env);
     }
 

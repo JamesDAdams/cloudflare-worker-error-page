@@ -1,54 +1,38 @@
 import errorTemplate from './html/error-template.html'
 import { HELPER } from './helper-functions.js'
 
-// Default error values, will be set in c_redirect using env
-let errorCode = "500";
-let errorType = "";
-let errorMessage = "";
-let errorGif = "";
-let enableReportError = false;
-let reportErrorButtonText = 'Signaler cette erreur';
-let reportErrorModalHeaderText  = "🆘 Signalez-moi l'erreur"
-let reportErrorLabelPlaceholder  = "Nom / Pseudo"
-let reportErrorModalNamePlaceholder  = "Ex : Jane Doe"
-let reportErrorCancelButtonText  = "Annuler"
-let reportErrorSubmitButtonText  = "Signaler"
-let reportErrorSuccessMessage  = "Merci pour votre signalement ! 🙏"
-let reportErrorFailureMessage  = "Une erreur est survenue lors de l'envoi du signalement. 😞"
-
-const REDIRECT = {
-  /**
-   * Generates HTML content with appropriate Canva URL
-   * @returns {string} The HTML with injected URL
-   */
-  generateErrorPage: () => {
-    return errorTemplate
-    .replace('ERROR_CODE', errorCode)
-    .replace('ERROR_TYPE', errorType)
-    .replace('ERROR_MESSAGE', errorMessage)
-    .replace('ERROR_GIF', errorGif)
-    .replace('ENABLE_REPORT_ERROR', enableReportError)
-    .replace('REPORT_ERROR_BUTTON_TEXT', reportErrorButtonText)
-    .replace('REPORT_ERROR_MODAL_HEADER_TEXT', reportErrorModalHeaderText)
-    .replace('REPORT_ERROR_LABEL_PLACEHOLDER', reportErrorLabelPlaceholder)
-    .replace('REPORT_ERROR_MODAL_NAME_PLACEHOLDER', reportErrorModalNamePlaceholder)
-    .replace('REPORT_ERROR_CANCEL_BUTTON_TEXT', reportErrorCancelButtonText)
-    .replace('REPORT_ERROR_SUBMIT_BUTTON_TEXT', reportErrorSubmitButtonText)
-    .replace('REPORT_ERROR_SUCCESS_MESSAGE', reportErrorSuccessMessage)
-    .replace('REPORT_ERROR_FAILURE_MESSAGE', reportErrorFailureMessage)
-    .replace('REPORT_ERROR_CODE', errorCode);
-  }
-};
-
+/**
+ * Generates the error page HTML with the given details
+ * @param {Object} details - Error details to inject into the template
+ * @returns {string} The HTML with injected values
+ */
+function generateErrorPage(details) {
+  return errorTemplate
+    .replace('ERROR_CODE', details.errorCode)
+    .replace('ERROR_TYPE', details.errorType)
+    .replace('ERROR_MESSAGE', details.errorMessage)
+    .replace('ERROR_GIF', details.errorGif)
+    .replace('ENABLE_REPORT_ERROR', details.enableReportError)
+    .replace('REPORT_ERROR_BUTTON_TEXT', details.reportErrorButtonText)
+    .replace('REPORT_ERROR_MODAL_HEADER_TEXT', details.reportErrorModalHeaderText)
+    .replace('REPORT_ERROR_LABEL_PLACEHOLDER', details.reportErrorLabelPlaceholder)
+    .replace('REPORT_ERROR_MODAL_NAME_PLACEHOLDER', details.reportErrorModalNamePlaceholder)
+    .replace('REPORT_ERROR_CANCEL_BUTTON_TEXT', details.reportErrorCancelButtonText)
+    .replace('REPORT_ERROR_SUBMIT_BUTTON_TEXT', details.reportErrorSubmitButtonText)
+    .replace('REPORT_ERROR_SUCCESS_MESSAGE', details.reportErrorSuccessMessage)
+    .replace('REPORT_ERROR_FAILURE_MESSAGE', details.reportErrorFailureMessage)
+    .replace('REPORT_ERROR_CODE', details.errorCode);
+}
 
 /**
  * Creates an HTTP response with specified content
  * @param {string} content - HTML content for the response
+ * @param {string} statusCode - HTTP status code
  * @returns {Response} The formatted response
  */
-function makeResponse(content) {
+function makeResponse(content, statusCode) {
   return new Response(content, {
-    status: errorCode,
+    status: parseInt(statusCode, 10),
     headers: {
       'Content-Type': 'text/html',
       'X-Worker-Handled': 'true'
@@ -56,40 +40,72 @@ function makeResponse(content) {
   });
 }
 
-function getErrorDetailsFromCfCode(cfCode, env) {
-  if(cfCode == "MAINTENANCE") {
-    errorCode = "503";
-    errorType = env.TEXT_MAINTENANCE_TYPE;
-    errorMessage = env.TEXT_MAINTENANCE_MESSAGE;
-    errorGif = env.TEXT_MAINTENANCE_GIF;
-    return;
-  }
-  errorCode = cfCode ? cfCode.toString() : "500";
-  enableReportError = env.ENABLE_REPORT_ERROR;
-  if(enableReportError) {
-    reportErrorButtonText = env.REPORT_ERROR_BUTTON_TEXT
-    reportErrorModalHeaderText  = env.REPORT_ERROR_MODAL_HEADER_TEXT
-    reportErrorLabelPlaceholder  = env.REPORT_ERROR_LABEL_PLACEHOLDER
-    reportErrorModalNamePlaceholder  = env.REPORT_ERROR_MODAL_NAME_PLACEHOLDER
-    reportErrorCancelButtonText  = env.REPORT_ERROR_CANCEL_BUTTON_TEXT
-    reportErrorSubmitButtonText  = env.REPORT_ERROR_SUBMIT_BUTTON_TEXT
-    reportErrorSuccessMessage  = env.REPORT_ERROR_SUCCESS_MESSAGE
-    reportErrorFailureMessage  = env.REPORT_ERROR_FAILURE_MESSAGE
+/**
+ * Builds error details object from an error code and env config
+ * @param {number|string} cfCode - The error code or "MAINTENANCE"
+ * @param {Object} env - Environment variables
+ * @returns {Object} Error details for the template
+ */
+function getErrorDetails(cfCode, env) {
+  const details = {
+    errorCode: "500",
+    errorType: env.TEXT_GENERIC_ERROR_TYPE,
+    errorMessage: env.TEXT_GENERIC_ERROR_MESSAGE,
+    errorGif: env.TEXT_GENERIC_ERROR_GIF,
+    enableReportError: false,
+    reportErrorButtonText: '',
+    reportErrorModalHeaderText: '',
+    reportErrorLabelPlaceholder: '',
+    reportErrorModalNamePlaceholder: '',
+    reportErrorCancelButtonText: '',
+    reportErrorSubmitButtonText: '',
+    reportErrorSuccessMessage: '',
+    reportErrorFailureMessage: ''
+  };
+
+  if (cfCode === "MAINTENANCE") {
+    details.errorCode = "503";
+    details.errorType = env.TEXT_MAINTENANCE_TYPE;
+    details.errorMessage = env.TEXT_MAINTENANCE_MESSAGE;
+    details.errorGif = env.TEXT_MAINTENANCE_GIF;
+    return details;
   }
 
-  if (env.TEXT_CONTAINER_ERROR_CODE.includes(cfCode)) {
-    errorType = env.TEXT_CONTAINER_ERROR_TYPE;
-    errorMessage = env.TEXT_CONTAINER_ERROR_MESSAGE;
-    errorGif = env.TEXT_CONTAINER_ERROR_GIF;
-  } else if (env.TEXT_BOX_ERROR_CODE.includes(cfCode)) {
-    errorType = env.TEXT_BOX_ERROR_TYPE;
-    errorMessage = env.TEXT_BOX_ERROR_MESSAGE;
-    errorGif = env.TEXT_BOX_ERROR_GIF;
-  } else if (env.TEXT_TUNNEL_ERROR_CODE.includes(cfCode)) {
-    errorType = env.TEXT_TUNNEL_ERROR_TYPE;
-    errorMessage = env.TEXT_TUNNEL_ERROR_MESSAGE;
-    errorGif = env.TEXT_TUNNEL_ERROR_GIF;
+  details.errorCode = cfCode ? cfCode.toString() : "500";
+  console.log(`Handling error with code: ${details.errorCode}`);
+
+  const enableReport = env.ENABLE_REPORT_ERROR === true || env.ENABLE_REPORT_ERROR === 'true';
+  details.enableReportError = enableReport;
+  if (enableReport) {
+    details.reportErrorButtonText = env.REPORT_ERROR_BUTTON_TEXT;
+    details.reportErrorModalHeaderText = env.REPORT_ERROR_MODAL_HEADER_TEXT;
+    details.reportErrorLabelPlaceholder = env.REPORT_ERROR_LABEL_PLACEHOLDER;
+    details.reportErrorModalNamePlaceholder = env.REPORT_ERROR_MODAL_NAME_PLACEHOLDER;
+    details.reportErrorCancelButtonText = env.REPORT_ERROR_CANCEL_BUTTON_TEXT;
+    details.reportErrorSubmitButtonText = env.REPORT_ERROR_SUBMIT_BUTTON_TEXT;
+    details.reportErrorSuccessMessage = env.REPORT_ERROR_SUCCESS_MESSAGE;
+    details.reportErrorFailureMessage = env.REPORT_ERROR_FAILURE_MESSAGE;
   }
+
+  const containerCodes = env.TEXT_CONTAINER_ERROR_CODE || [];
+  const boxCodes = env.TEXT_BOX_ERROR_CODE || [];
+  const tunnelCodes = env.TEXT_TUNNEL_ERROR_CODE || [];
+
+  if (containerCodes.includes(cfCode)) {
+    details.errorType = env.TEXT_CONTAINER_ERROR_TYPE;
+    details.errorMessage = env.TEXT_CONTAINER_ERROR_MESSAGE;
+    details.errorGif = env.TEXT_CONTAINER_ERROR_GIF;
+  } else if (boxCodes.includes(cfCode)) {
+    details.errorType = env.TEXT_BOX_ERROR_TYPE;
+    details.errorMessage = env.TEXT_BOX_ERROR_MESSAGE;
+    details.errorGif = env.TEXT_BOX_ERROR_GIF;
+  } else if (tunnelCodes.includes(cfCode)) {
+    details.errorType = env.TEXT_TUNNEL_ERROR_TYPE;
+    details.errorMessage = env.TEXT_TUNNEL_ERROR_MESSAGE;
+    details.errorGif = env.TEXT_TUNNEL_ERROR_GIF;
+  }
+
+  return details;
 }
 
 /**
@@ -101,37 +117,33 @@ function getErrorDetailsFromCfCode(cfCode, env) {
  * @param {Object} env - Environment variables
  * @returns {Promise<Response|null>} Appropriate error response or null
  */
-export async function c_redirect(request, response, thrownError = null, isMaintenance = false, env) {
-  // Set default error details using env inside the function
-  errorType = env.TEXT_GENERIC_ERROR_TYPE;
-  errorMessage = env.TEXT_GENERIC_ERROR_MESSAGE;
-  errorGif = env.TEXT_GENERIC_ERROR_GIF;
-
+export async function c_redirect(request, response, thrownError, isMaintenance, env) {
   // Maintenance mode
   if (isMaintenance) {
-    getErrorDetailsFromCfCode("MAINTENANCE", env);
-    return makeResponse(REDIRECT.generateErrorPage());
+    const details = getErrorDetails("MAINTENANCE", env);
+    return makeResponse(generateErrorPage(details), details.errorCode);
   }
 
+  // Check if origin is reachable (only if ORIGIN_PING_URL is configured)
   const originUp = await HELPER.isOriginReachable(undefined, env).catch(() => null);
-  //const npmUp = await HELPER.isNpmUp(undefined, env).catch(() => false);
 
-  // Internet down
-  if(!originUp) {
-    getErrorDetailsFromCfCode(504, env);
-    return makeResponse(REDIRECT.generateErrorPage());
+  // Origin confirmed down (originUp === false means the check ran and failed)
+  // originUp === null means ORIGIN_PING_URL is not configured, so we skip this check
+  if (originUp === false) {
+    const details = getErrorDetails(504, env);
+    return makeResponse(generateErrorPage(details), details.errorCode);
   }
 
-  /*
-  // NPM down so all services down
-  if(!npmUp) {
-    // it's the default message so no need to change anything
-  } */
+  // Handle server errors (5xx) from the response
+  if (response && response.status >= 500) {
+    const details = getErrorDetails(response.status, env);
+    return makeResponse(generateErrorPage(details), details.errorCode);
+  }
 
-  // Handle server errors (5xx)
-  if(response && response.status >= 500) {
-    getErrorDetailsFromCfCode(response.status, env);
-    return makeResponse(REDIRECT.generateErrorPage());
+  // Handle thrown errors (fetch failed entirely, e.g. container down / connection refused)
+  if (thrownError && !response) {
+    const details = getErrorDetails(502, env);
+    return makeResponse(generateErrorPage(details), details.errorCode);
   }
 
   return null;
