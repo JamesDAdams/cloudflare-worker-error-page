@@ -18,7 +18,7 @@ enabled = false
 # Language setting (FR or EN)
 LANGUAGE = "FR"
 # Enable/disable cache (true/false) for limite api call between this worker and the kv storage, in Cloudflare free plan You have only 100 000 reads per day
-ENABLE_CACHE = false
+ENABLE_CACHE = true
 # Cache duration in ms (default: 60000 = 1 minute)
 CACHE_TTL_MS = 60000
 

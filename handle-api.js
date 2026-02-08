@@ -9,14 +9,26 @@ async function getStateObj(env) {
 
 async function setStateObj(env, obj) {
   await env.MAINTENANCE_KV.put('MAINTENANCE_STATE', JSON.stringify(obj));
-  invalidateCache();
+  await invalidateCache(['MAINTENANCE_STATE']);
 }
 
-function invalidateCache() {
+async function invalidateCache(keys = ['MAINTENANCE_STATE', 'wan-is-4g', 'ups-on-battery']) {
+  // Invalidate in-memory cache
   if (globalThis.cache) {
     globalThis.cache.maintenance = { value: null, ts: 0 };
     globalThis.cache.is4g = { value: null, ts: 0 };
     globalThis.cache.upsOnBattery = { value: null, ts: 0 };
+  }
+
+  // Invalidate Cloudflare Cache API
+  try {
+    const cache = caches.default;
+    for (const key of keys) {
+      const cacheUrl = `https://kv-cache.internal/${key}`;
+      await cache.delete(cacheUrl);
+    }
+  } catch (e) {
+    console.error('Cache API invalidation error:', e);
   }
 }
 
@@ -96,7 +108,7 @@ async function toggle4gMode(env, state) {
     return new Response('Fonctionnalité 4G désactivée', { status: 403 });
   }
   await env.MAINTENANCE_KV.put('wan-is-4g', state.is4gMode ? 'false' : 'true');
-  invalidateCache();
+  await invalidateCache(['wan-is-4g']);
   return new Response('Mode 4G mis à jour');
 }
 
@@ -109,7 +121,7 @@ async function set4gMode(request, env) {
     return new Response('Format attendu: { enabled: true/false }', { status: 400 });
   }
   await env.MAINTENANCE_KV.put('wan-is-4g', enabled ? 'true' : 'false');
-  invalidateCache();
+  await invalidateCache(['wan-is-4g']);
   return new Response('Mode 4G mis à jour');
 }
 
@@ -118,7 +130,7 @@ async function toggleUpsMode(env, state) {
     return new Response('Fonctionnalité UPS désactivée', { status: 403 });
   }
   await env.MAINTENANCE_KV.put('ups-on-battery', state.upsOnBattery ? 'false' : 'true');
-  invalidateCache();
+  await invalidateCache(['ups-on-battery']);
   return new Response('Mode UPS mis à jour');
 }
 
@@ -131,7 +143,7 @@ async function setUpsMode(request, env) {
     return new Response('Format attendu: { enabled: true/false }', { status: 400 });
   }
   await env.MAINTENANCE_KV.put('ups-on-battery', enabled ? 'true' : 'false');
-  invalidateCache();
+  await invalidateCache(['ups-on-battery']);
   return new Response('Mode UPS mis à jour');
 }
 

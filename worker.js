@@ -26,16 +26,59 @@ const cache = {
   upsOnBattery: { value: null, ts: 0 }
 };
 
-// Read a single KV key with optional in-memory cache
+// Read a single KV key with Cloudflare Cache API + in-memory cache
 async function getCachedKvValue(env, cacheEntry, kvKey, useCache, cacheEnabled, cacheTtl, now) {
+  // Check in-memory cache first (fastest)
   if (useCache && cacheEnabled && cacheEntry.value !== null && (now - cacheEntry.ts < cacheTtl)) {
     return cacheEntry.value;
   }
-  const value = await env.MAINTENANCE_KV.get(kvKey);
+
+  // Try Cloudflare Cache API (shared between worker instances)
   if (useCache && cacheEnabled) {
+    try {
+      const cacheUrl = `https://kv-cache.internal/${kvKey}`;
+      const cache = caches.default;
+      const cachedResponse = await cache.match(cacheUrl);
+
+      if (cachedResponse) {
+        const value = await cachedResponse.text();
+        // Update in-memory cache
+        cacheEntry.value = value;
+        cacheEntry.ts = now;
+        return value;
+      }
+    } catch (e) {
+      // Fallback to KV if Cache API fails
+      console.error('Cache API error:', e);
+    }
+  }
+
+  // Read from KV
+  const value = await env.MAINTENANCE_KV.get(kvKey);
+
+  // Store in both caches
+  if (useCache && cacheEnabled) {
+    // Update in-memory cache
     cacheEntry.value = value;
     cacheEntry.ts = now;
+
+    // Store in Cloudflare Cache API
+    try {
+      const cacheUrl = `https://kv-cache.internal/${kvKey}`;
+      const cache = caches.default;
+      const response = new Response(value, {
+        headers: {
+          'Cache-Control': `max-age=${Math.floor(cacheTtl / 1000)}`,
+          'Content-Type': 'text/plain'
+        }
+      });
+      await cache.put(cacheUrl, response);
+    } catch (e) {
+      // Silent fail on cache storage
+      console.error('Cache API put error:', e);
+    }
   }
+
   return value;
 }
 
@@ -50,8 +93,19 @@ async function getMaintenanceState(env, host, useCache = true) {
     isGlobalMaintenance: false, subdomainsMaintenance: [], bannerSubdomains: [], bannerMessage: ''
   });
 
-  const is4gMode = await getCachedKvValue(env, cache.is4g, 'wan-is-4g', useCache, cacheEnabled, cacheTtl, now);
-  const upsOnBattery = await getCachedKvValue(env, cache.upsOnBattery, 'ups-on-battery', useCache, cacheEnabled, cacheTtl, now);
+  // Conditional reads: only fetch if the feature is enabled (Solution #4)
+  let is4gMode = null;
+  let upsOnBattery = null;
+
+  if (envIsTrue(env.ENABLE_4G_BANNER)) {
+    const is4gRaw = await getCachedKvValue(env, cache.is4g, 'wan-is-4g', useCache, cacheEnabled, cacheTtl, now);
+    is4gMode = is4gRaw === 'true';
+  }
+
+  if (envIsTrue(env.ENABLE_UPS_BANNER)) {
+    const upsRaw = await getCachedKvValue(env, cache.upsOnBattery, 'ups-on-battery', useCache, cacheEnabled, cacheTtl, now);
+    upsOnBattery = upsRaw === 'true';
+  }
 
   return {
     isGlobalMaintenance: stateObj.isGlobalMaintenance === true || stateObj.isGlobalMaintenance === 'true',
@@ -59,8 +113,8 @@ async function getMaintenanceState(env, host, useCache = true) {
     isSubdomainMaintenance: Array.isArray(stateObj.subdomainsMaintenance) ? stateObj.subdomainsMaintenance.includes(host) : false,
     bannerSubdomains: Array.isArray(stateObj.bannerSubdomains) ? stateObj.bannerSubdomains : [],
     bannerMessage: typeof stateObj.bannerMessage === 'string' ? stateObj.bannerMessage : '',
-    is4gMode: is4gMode === 'true',
-    upsOnBattery: upsOnBattery === 'true'
+    is4gMode: is4gMode === true,
+    upsOnBattery: upsOnBattery === true
   };
 }
 
@@ -138,6 +192,19 @@ async function handleReportError(request, env) {
 // Helper to check if an env var is truthy (handles both boolean and string from wrangler.toml)
 function envIsTrue(value) {
   return value === true || value === 'true';
+}
+
+// Invalidate Cache API entries when state changes
+async function invalidateCacheApi(keys) {
+  try {
+    const cache = caches.default;
+    for (const key of keys) {
+      const cacheUrl = `https://kv-cache.internal/${key}`;
+      await cache.delete(cacheUrl);
+    }
+  } catch (e) {
+    console.error('Cache API invalidation error:', e);
+  }
 }
 
 // Determine which banner message to show, if any (UPS + 4G can combine)
